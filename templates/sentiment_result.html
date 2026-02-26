@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentiment Result</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons.png') }}">
+
+
+  <style>
+    body {
+      font-family: 'Google Sans', sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: var(--bg, #f9fafb);
+      color: var(--text, #111827);
+      text-align: center;
+    }
+    header h1 {
+      font-size: 1.6rem;
+      margin: 0.5rem 0;
+    }
+    header p {
+      font-size: 0.95rem;
+      color: var(--text-muted, #6b7280);
+      margin-bottom: 1rem;
+    }
+    .result {
+      max-width: 420px;
+      margin: 1.5rem auto;
+      background: var(--card, #ffffff);
+      padding: 1.5rem;
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+    }
+    .result h2 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+    }
+    .result p {
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+    }
+    canvas {
+      width: 260px !important;
+      height: 260px !important;
+      margin: 0 auto 1rem;
+    }
+    .chart-actions {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    .chart-actions button {
+      background: var(--accent);
+      color: #fff;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.3s ease;
+    }
+    .chart-actions button:hover {
+      background: var(--accent-dark);
+    }
+    .theme-toggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+    }
+    footer {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      margin-top: 2rem;
+    }
+    #toast {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #60a5fa;
+      color: white;
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      z-index: 1000;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+
+<body id="page" data-theme="light">
+  <button class="theme-toggle" onclick="toggleTheme()">🌗</button>
+
+  <div id="toast"></div>
+
+  <header>
+    <h1>🧠 Sentiment Overview</h1>
+    <p>AI-based tone summary</p>
+  </header>
+
+  <section class="result">
+    <h2>{{ display }}</h2>
+    <p>{{ result }}</p>
+    <canvas id="sentimentChart"></canvas>
+
+    <div class="chart-actions">
+      <button onclick="downloadChart()">⬇️ Download Chart</button>
+      <button onclick="copySentiment()">📋 Copy Sentiment</button>
+    </div>
+  </section>
+
+  <footer>
+    <p>&copy; 2025 · Sri Akash Kadali</p>
+  </footer>
+
+  <!-- Toggle Theme Script -->
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      document.getElementById('page').setAttribute('data-theme', next);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      toast.innerText = msg;
+      toast.style.display = "block";
+      setTimeout(() => { toast.style.display = "none"; }, 3000);
+    }
+  </script>
+
+  <!-- Chart.js + Actions -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const sentimentScores = {{ result_dict | tojson }};
+    const ctx = document.getElementById('sentimentChart').getContext('2d');
+
+    const sentimentChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Negative', 'Neutral', 'Positive'],
+        datasets: [{
+          label: 'Sentiment',
+          data: [sentimentScores.neg, sentimentScores.neu, sentimentScores.pos],
+          backgroundColor: ['#ef4444', '#facc15', '#10b981'],
+          borderColor: '#fff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        cutout: '60%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: 'var(--text)',
+              font: { size: 12 },
+              boxWidth: 14
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: context => {
+                const value = context.parsed;
+                return `${context.label}: ${(value * 100).toFixed(1)}%`;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    function downloadChart() {
+      const link = document.createElement('a');
+      link.href = sentimentChart.toBase64Image();
+      link.download = 'sentiment_chart.png';
+      link.click();
+      showToast("✅ Chart downloaded");
+    }
+
+    function copySentiment() {
+      const scores = `Negative: ${(sentimentScores.neg * 100).toFixed(1)}%\nNeutral: ${(sentimentScores.neu * 100).toFixed(1)}%\nPositive: ${(sentimentScores.pos * 100).toFixed(1)}%`;
+      navigator.clipboard.writeText(scores)
+        .then(() => showToast("📋 Copied sentiment scores"))
+        .catch(() => showToast("❌ Copy failed"));
+    }
+  </script>
+</body>
+</html>
